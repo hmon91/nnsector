@@ -187,13 +187,6 @@ with the same functions: `nnsector.network`, `nnsector.local_bound`,
 `nnsector.global_bound`, `nnsector.check`, `nnsector.forward` and
 `nnsector.demo_network`.
 
-## Publishing to PyPI
-
-Releases can go to PyPI, so that `pip install nnsector` works. Once, on
-[pypi.org](https://pypi.org), add a trusted publisher for this repository with
-the workflow `publish.yml` and the environment `pypi`. After that, publishing
-a GitHub release uploads the package.
-
 ## Citing
 
 If you use nnsector, please cite:
