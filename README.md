@@ -246,8 +246,8 @@ $`\Delta y\geq0`$, the returned matrices satisfy
 
 **Several inputs, other anchor positions.** Use `sb.pieces`. On piece `k`,
 let $`z=|\Delta y|`$ and let $`s_k`$ be `piece.signs`. For
-$`0\leq z\leq\texttt{piece.z_hi}`$ and
-$`y=y^*+\operatorname{diag}(s_k)z`$,
+$`0\leq z\leq\texttt{piece.z\_hi}`$ and
+$`y=y^*+\mathrm{diag}(s_k)z`$,
 
 ```math
 L_kz\leq\Delta\pi\leq U_kz.
