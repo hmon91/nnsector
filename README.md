@@ -1,254 +1,397 @@
 # nnsector
 
+### Sector bounds for neural networks, built for control.
+
 [![tests](https://github.com/hmon91/nnsector/actions/workflows/tests.yml/badge.svg)](https://github.com/hmon91/nnsector/actions/workflows/tests.yml)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](#installation)
+[![MATLAB and Octave](https://img.shields.io/badge/MATLAB-GNU%20Octave-E16737.svg)](#matlab-and-gnu-octave)
+[![BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
+[![Paper](https://img.shields.io/badge/Paper-CDC%202025-008C86.svg)](#citation)
 
-**nnsector** computes local and global sector bounds for feedforward neural
-networks. It is implemented in Python and in MATLAB (compatible with GNU
-Octave).
+**Turn a trained neural network into a sector description you can use in control analysis.**
+Given a feedforward network, an input box, and an operating point, `nnsector`
+computes linear bounds on how the network output changes throughout that box.
+It also provides global bounds, Python and MATLAB implementations, and an
+optional importer for PyTorch models.
 
-A sector bound encloses a nonlinear map between two linear maps. Sector
-bounds are the standard description of a nonlinearity in absolute stability
-analysis, for example in the circle criterion and in Aizerman-type
-conditions for Lur'e systems. They therefore make it possible to certify
-feedback systems that contain a trained neural network as a controller, an
-observer, or a sensor model. The use of local sector bounds in the stability
-and region of attraction analysis of neural network feedback systems is
-described in [[1]](#citation). The companion library
-[nnstab](https://github.com/hmon91/nnstab) uses nnsector to verify the
-exponential stability of such systems.
+![A trained neural controller is converted to a local sector, which can be combined with plant dynamics and a stability criterion.](docs/assets/overview.png)
 
-## Problem statement
+[Quick start](#quick-start) · [Your own network](#your-own-network) · [MATLAB](#matlab-and-gnu-octave) · [How it works](#computation-of-the-local-bound) · [Guarantees](#guarantees) · [Examples](#examples-and-tests) · [Citation](#citation)
 
-A feedforward network with $`q`$ hidden layers maps an input
-$`y \in \mathbb{R}^p`$ to an output $`\pi(y) \in \mathbb{R}^m`$:
+## Why nnsector?
 
-```math
-\omega_0 = y, \qquad
-\omega_i = f\left(W_i\,\omega_{i-1} + b_i\right), \quad i = 1, \dots, q, \qquad
-\pi(y) = W_{q+1}\,\omega_q + b_{q+1},
-```
+- **Bounds for control analysis.** Obtain sector matrices for use in suitable absolute-stability, robustness, and region-of-attraction conditions. The companion [nnstab](https://github.com/hmon91/nnstab) library uses these bounds for exponential-stability verification.
+- **Choose the region that matters.** Compute a local sector around your operating point, or a global bound valid for all inputs.
+- **Keep biases and shifted operating points.** Bound changes relative to the actual network output at the selected point.
+- **A lightweight workflow.** The Python core needs NumPy and no optimization solver. Use weights directly or import a supported `torch.nn.Sequential` model.
 
-where $`W_i \in \mathbb{R}^{l_i \times l_{i-1}}`$ are the weights,
-$`b_i \in \mathbb{R}^{l_i}`$ are the biases, and the activation function
-$`f`$ acts entrywise and is the same in all hidden layers.
-
-Given an operating point $`y^*`$ and a box
-$`\mathcal{Y} = [\underline{y}, \overline{y}]`$ that contains it, nnsector
-computes two matrices $`\gamma_1, \gamma_2 \in \mathbb{R}^{m \times p}`$
-such that, on $`\mathcal{Y}`$, the network lies between the two linear maps
-through the point $`(y^*, \pi(y^*))`$ with slopes $`\gamma_1`$ and
-$`\gamma_2`$. The precise statements are given in
-[Guarantees](#guarantees). nnsector also computes a global bound that holds
-for all inputs.
+A sector bound describes the network. A closed-loop stability certificate
+also requires the plant dynamics and a stability condition whose assumptions
+are satisfied.
 
 ## Installation
 
 ```bash
-pip install git+https://github.com/hmon91/nnsector.git
+python -m pip install git+https://github.com/hmon91/nnsector.git
 ```
 
-The package requires Python 3.10 or later and NumPy. PyTorch is optional and
-is needed only to import PyTorch models (`pip install torch`). To install
-the package for development and run the tests:
-
-```bash
-git clone https://github.com/hmon91/nnsector.git
-cd nnsector
-pip install -e ".[test]"
-pytest
-```
+Requires **Python 3.10+** and **NumPy**. PyTorch is needed only for
+`Network.from_torch`; Matplotlib is needed only for plotting examples.
+For MATLAB or GNU Octave, see [setup below](#matlab-and-gnu-octave).
 
 ## Quick start
+
+This example runs immediately with the network included in the package:
 
 ```python
 import nnsector as ns
 
-# W_i has shape (l_i, l_{i-1}), the layout of torch.nn.Linear.weight
-net = ns.Network([W1, W2, W3], [b1, b2, b3], activation="tanh")
+net = ns.demo_network()                         # 1 → 8 → 8 → 1, tanh, with biases
+sb = ns.local_bound(net, -1.0, 1.0, ystar=0.0)   # local sector on [-1, 1]
 
-sb = ns.local_bound(net, y_lo=-1, y_hi=1)         # operating point y* = 0 (default)
-sb = ns.local_bound(net, -1, 1, ystar=0.5)         # another operating point
+print(f"Local sector: [{sb.gamma1.item():.4f}, {sb.gamma2.item():.4f}]")
+print("Sample check passed:", ns.check(net, sb).passed)
+
+gb = ns.global_bound(net)                       # bound for all inputs
+```
+
+```text
+Local sector: [-2.7863, -1.2002]
+Sample check passed: True
+```
+
+For this single-input network, the result means that every secant from the
+fixed operating point has a slope between `sb.gamma1` and `sb.gamma2`:
+
+```math
+\gamma_1 \leq \frac{\pi(y)-\pi(0)}{y} \leq \gamma_2,
+\qquad y\in[-1,1],\quad y\ne 0.
+```
+
+The network was trained to approximate the controller
+$u=-\tanh(2y)-0.5y$. The following figures evaluate the **actual bundled
+network** and use the bounds returned by `nnsector`.
+
+![Global and local sectors for the same demo network, plotted on identical axes. The local sector is narrower on the chosen box.](docs/assets/local-vs-global.png)
+
+| Calculation | Slope interval, rounded | Scope |
+|---|---:|---|
+| `global_bound(net)` | `[-4.6588, 4.6588]` | Every pair of inputs |
+| `local_bound(net, -1, 1)` | `[-2.7863, -1.2002]` | Fixed anchor `y* = 0`, box `[-1, 1]` |
+| Secants evaluated on a dense grid | `[-2.5200, -1.4630]` | Sampled reference, not a proof of the extrema |
+
+`check` searches for violations numerically. A successful sample check is a
+useful diagnostic; it does not prove a bound.
+
+<details>
+<summary><strong>Watch the sector change as the input box shrinks</strong></summary>
+
+![Animation of recomputed sectors as the radius of the input box changes, with fixed axes and a fixed operating point.](docs/assets/local-sector.gif)
+
+The shaded sector applies only inside the selected box. A
+[static view](docs/assets/domain-and-tightness.png) is available below.
+
+</details>
+
+## Your own network
+
+### From NumPy weights
+
+Provide one weight matrix and one bias vector per affine layer. Weights use
+the same `(out_features, in_features)` layout as `torch.nn.Linear`.
+The final layer is linear; all hidden layers use the same activation.
+
+```python
+import numpy as np
+import nnsector as ns
+
+net = ns.Network(
+    weights=[np.array([[1.0], [-0.7]]), np.array([[1.2, -0.8]])],
+    biases=[np.array([0.2, -0.1]), np.array([0.05])],
+    activation="tanh",
+)
+
+sb = ns.local_bound(net, -1.0, 1.0, ystar=0.25)
 print(sb.gamma1, sb.gamma2)
-
-gb = ns.global_bound(net)                          # bound for all inputs
-print(ns.check(net, sb))                           # numerical check on sample points
 ```
 
-**Example.** The package contains a demonstration network with one input,
-two hidden layers of eight tanh neurons, and one output. It was trained to
-approximate the controller $`u = -\tanh(2y) - 0.5\,y`$.
+Omit `biases` to use zero biases. For a network with `p` inputs and `m`
+outputs, `net(y)` accepts one input of shape `(p,)`, or a batch of shape
+`(N, p)`, and returns `(m,)` or `(N, m)` respectively.
+
+### From PyTorch
+
+Install PyTorch if needed (`python -m pip install torch`). Then import a
+supported sequential model:
 
 ```python
->>> net = ns.demo_network()
->>> sb = ns.local_bound(net, -1, 1)
->>> sb.gamma1.item(), sb.gamma2.item()
-(-2.7862..., -1.2001...)
-```
+import torch.nn as nn
+import nnsector as ns
 
-On $`[-1, 1]`$, the secant slopes of this network about $`y^* = 0`$ lie in
-$`[-2.520, -1.463]`$. The computed bound $`[-2.786, -1.200]`$ contains this
-interval and is close to it.
+model = nn.Sequential(
+    nn.Linear(1, 8), nn.Tanh(),
+    nn.Linear(8, 8), nn.Tanh(),
+    nn.Linear(8, 1),
+)
+# Train the model, or load your trained weights, before analyzing it.
+model.eval()
 
-**PyTorch models.** A trained model is converted with
-
-```python
 net = ns.Network.from_torch(model)
+sb = ns.local_bound(net, -1.0, 1.0)
 ```
 
-`Network.from_torch` accepts a `torch.nn.Sequential` of `nn.Linear` layers
-with one type of activation (`nn.Tanh`, `nn.Sigmoid`, `nn.ReLU`,
-`nn.LeakyReLU` or `nn.Softplus`). Nested `nn.Sequential` blocks are
-flattened, consecutive `nn.Linear` layers are merged, and `nn.Identity`,
-`nn.Dropout` and `nn.Flatten` are ignored. The weights are copied in double
-precision.
+The importer copies weights to NumPy double precision. It accepts nested
+`nn.Sequential` blocks and merges consecutive `nn.Linear` layers.
+`nn.Identity`, `nn.Dropout`, and `nn.Flatten` are skipped under the vector-input,
+evaluation-mode interpretation. Hidden activations must all have the same
+type and parameters; `nn.Softplus` requires `beta=1`.
+Convolutions, residual connections, recurrent layers, and a final activation
+are outside this importer's supported model format.
+
+### Supported activations
+
+| `activation` | Function | Global secant-slope range |
+|---|---|---|
+| `"tanh"` (default) | $\tanh(x)$ | $[0,1]$ |
+| `"sigmoid"` | $1/(1+e^{-x})$ | $[0,1/4]$ |
+| `"relu"` | $\max(x,0)$ | $[0,1]$ |
+| `"leakyrelu"` | $\max(x,0)+\alpha\min(x,0)$ | $[\min(\alpha,1),\max(\alpha,1)]$ |
+| `"softplus"` | $\log(1+e^x)$ | $[0,1]$ |
+
+Leaky ReLU uses `alpha=0.01` by default and accepts `alpha >= 0`, for example
+`ns.Network(weights, biases, activation="leakyrelu", alpha=0.1)`.
+The supported activations are nondecreasing; they need not vanish at zero.
+Weights may have either sign.
+
+## Choose your operating point and region
+
+`ystar` must lie inside the input box. It defaults to zero, so set it
+explicitly when your box does not contain zero.
+
+```python
+net = ns.demo_network()
+sb = ns.local_bound(net, -1.0, 1.0, ystar=0.5)
+print(f"[{sb.gamma1.item():.4f}, {sb.gamma2.item():.4f}]")
+# [-2.3799, -0.7512]
+```
+
+![Sectors anchored at y*=0 and y*=0.5 pass through the corresponding actual network outputs.](docs/assets/operating-point.png)
+
+The local result bounds $\pi(y)-\pi(y^*)$ relative to **one fixed anchor**.
+It does not establish the same local slope bounds between every pair of
+points in the box. Setting `ystar=0` gives a bound relative to $\pi(0)$;
+this is a sector through the origin only when $\pi(0)=0$.
+
+![The local sector varies with the input-box radius. On the demo, the default interval intersection gives a narrower sector than using IBP intervals alone.](docs/assets/domain-and-tightness.png)
+
+By default, `intervals="intersect"` refines each neuron interval using both
+interval bound propagation (IBP) and the propagated linear bounds.
+Use `intervals="ibp"` to use only the IBP intervals in this same sector algorithm.
+On the demo over `[-1, 1]`, these modes return `[-2.7863, -1.2002]` and
+`[-2.8782, 0.2514]`, respectively: a **49.3% reduction in slope-interval width**
+for the default mode on this example. This is a comparison of two `nnsector`
+settings, not a comparison with another library.
+
+## Several inputs
+
+With several inputs, the sign of each component of $y-y^*$ matters.
+`nnsector` splits the box at the anchor and computes a bound on each piece.
+
+![A two-input box splits into four sign regions around an interior operating point. Each region has its own L and U matrices acting on absolute input displacement.](docs/assets/multi-input.png)
+
+```python
+import numpy as np
+import nnsector as ns
+
+net = ns.Network(
+    [np.array([[1.0, 0.4], [-0.5, 1.0]]), np.array([[1.2, -0.7]])],
+    [np.array([0.1, -0.2]), np.array([0.0])],
+    activation="tanh",
+)
+sb = ns.local_bound(net, [0, 0], [2, 1], ystar=[1, 0.5])
+
+print(len(sb.pieces))                  # 4
+print(sb.gamma1 is None)               # True: use the piecewise matrices
+for piece in sb.pieces:
+    print(piece.signs, piece.L, piece.U)
+```
+
+An interior anchor can produce up to $2^p$ pieces for `p` inputs. A
+lower-corner anchor needs one piece. This sign partitioning is an important
+cost consideration for high-dimensional inputs.
 
 ## Guarantees
 
-Inequalities between vectors hold entrywise, and $`\lvert \cdot \rvert`$
-denotes the entrywise absolute value. The function
-`local_bound(net, y_lo, y_hi, ystar)` returns a bound of one of the
-following three forms.
+Write $\Delta y=y-y^*$ and $\Delta\pi=\pi(y)-\pi(y^*)$.
+All inequalities and absolute values below are componentwise.
+The network has `p` inputs, `m` outputs, `q` hidden layers, and a linear
+output layer. The implementation computes its bounds in double precision.
 
-**One input ($`p = 1`$).** For every $`y \neq y^*`$ in the box,
+**One input.** For every $y\ne y^*$ in the specified box,
 
 ```math
-\gamma_1 \;\le\; \frac{\pi(y) - \pi(y^*)}{y - y^*} \;\le\; \gamma_2 .
+\gamma_1\leq\frac{\Delta\pi}{\Delta y}\leq\gamma_2.
 ```
 
-**Operating point at the lower corner of the box ($`y^* = \underline{y}`$),
-any number of inputs.** For every $`y`$ in the box,
+The boundary lines are $\pi(y^*)+\gamma_1\Delta y$ and
+$\pi(y^*)+\gamma_2\Delta y$. Their ordering as lower and upper output
+bounds reverses when $\Delta y<0$.
+
+**Several inputs, with the anchor at the lower corner.** Since
+$\Delta y\geq0$, the returned matrices satisfy
 
 ```math
-\gamma_1\,(y - y^*) \;\le\; \pi(y) - \pi(y^*) \;\le\; \gamma_2\,(y - y^*) .
+\gamma_1\Delta y\leq\Delta\pi\leq\gamma_2\Delta y.
 ```
 
-**Operating point inside the box, several inputs.** In this case no single
-pair of matrices holds on all sides of $`y^*`$. The box is divided at
-$`y^*`$ into at most $`2^p`$ pieces, on each of which every component of
-$`y - y^*`$ has a fixed sign. On piece $`k`$,
+**Several inputs, other anchor positions.** Use `sb.pieces`. On piece `k`,
+let $z=|\Delta y|$ and let $s_k$ be `piece.signs`. For
+$0\leq z\leq\texttt{piece.z_hi}$ and
+$y=y^*+\operatorname{diag}(s_k)z$,
 
 ```math
-L_k\,\lvert y - y^* \rvert \;\le\; \pi(y) - \pi(y^*) \;\le\; U_k\,\lvert y - y^* \rvert ,
+L_kz\leq\Delta\pi\leq U_kz.
 ```
 
-where $`L_k`$ and $`U_k`$ are stored in `sb.pieces[k]`, and `sb.gamma1` and
-`sb.gamma2` are `None`.
+Here `sb.gamma1` and `sb.gamma2` are `None`; `piece.L` and `piece.U`
+have shape `(m, p)`.
 
-**Global bound.** The function `global_bound(net)` returns, for all $`y`$
-and $`y^*`$,
+**Global bound.** For every pair $y,y^*$,
 
 ```math
--\Gamma_2\,\lvert y - y^* \rvert \;\le\; \pi(y) - \pi(y^*) \;\le\; \Gamma_2\,\lvert y - y^* \rvert ,
+-\Gamma_2|y-y^*|\leq\pi(y)-\pi(y^*)\leq\Gamma_2|y-y^*|,
 \qquad
-\Gamma_2 = c^{\,q}\,\lvert W_{q+1} \rvert \cdots \lvert W_1 \rvert ,
+\Gamma_2=c^q|W_{q+1}|\cdots|W_1|,
+\qquad \Gamma_1=-\Gamma_2,
 ```
 
-where $`c`$ is the largest secant slope of the activation function (see
-[Supported activations](#supported-activations)). If the network has no
-biases and $`f(0) = 0`$ (tanh, ReLU, leaky ReLU), then $`\pi(0) = 0`$, and
-the bound gives $`\Gamma_1\,y \le \pi(y) \le \Gamma_2\,y`$ for all
-$`y \ge 0`$, with $`\Gamma_1 = -\Gamma_2`$.
-
-The matrices $`\gamma_1, \gamma_2`$ (`gamma1`, `gamma2`) and
-$`\Gamma_1, \Gamma_2`$ (`Gamma1`, `Gamma2`) have shape $`m \times p`$. The
-result of `local_bound` also contains `ystar`, `pistar` (the value
-$`\pi(y^*)`$), `y_lo`, `y_hi` and, for each piece, `signs`, `z_hi` (the
-largest $`\lvert y - y^* \rvert`$ on the piece) and `case3` (the number of
-neurons per hidden layer in Case 3; see
-[Computation of the local bound](#computation-of-the-local-bound)).
-
-## Supported activations
-
-All hidden layers use the same activation function.
-
-| `activation` | $`f(x)`$ | Secant slopes lie in | $`f(0)`$ |
-|---|---|---|---|
-| `"tanh"` (default) | $`\tanh(x)`$ | $`[0, 1]`$ | $`0`$ |
-| `"sigmoid"` | $`1/(1 + e^{-x})`$ | $`[0, 1/4]`$ | $`1/2`$ |
-| `"relu"` | $`\max(x, 0)`$ | $`[0, 1]`$ | $`0`$ |
-| `"leakyrelu"` | $`\max(x, 0) + \alpha \min(x, 0)`$ | $`[\alpha, 1]`$ for $`\alpha \le 1`$ | $`0`$ |
-| `"softplus"` | $`\log(1 + e^{x})`$ | $`[0, 1]`$ | $`\log 2`$ |
-
-The slope of the leaky ReLU for $`x < 0`$ is set with `alpha` (default
-0.01), for example `ns.Network(W, b, activation="leakyrelu", alpha=0.1)`.
-
-## Functions
-
-| Function | Description |
-|---|---|
-| `Network(weights, biases=None, activation="tanh", alpha=None)` | Defines a network. `net(y)` evaluates it for `y` of shape `(p,)` or `(N, p)`. |
-| `Network.from_torch(model)` | Converts a `torch.nn.Sequential` model. |
-| `local_bound(net, y_lo, y_hi, ystar=None, intervals="intersect")` | Local sector bound about `ystar` (default 0) on the box `[y_lo, y_hi]`. |
-| `global_bound(net)` | Global sector bound. |
-| `check(net, bound, samples=20000, box=None, ystar=None)` | Evaluates the network on sample points and reports the largest violation of a bound. A sampling test cannot prove a bound; it can only detect an incorrect one. |
-| `demo_network()` | The demonstration network described above. |
+where $c$ is the activation's largest absolute secant slope.
+`gb.Gamma1` and `gb.Gamma2` have shape `(m, p)`.
+With zero biases and an activation that vanishes at zero (tanh, ReLU, or
+leaky ReLU), $\pi(0)=0$; for $y\geq0$, this specializes to
+$\Gamma_1y\leq\pi(y)\leq\Gamma_2y$.
 
 ## Computation of the local bound
 
-The local bound is computed separately on each piece of the box, in three
-steps.
+On each sign piece, `nnsector` propagates bounds on deviations from the
+operating point through the network:
 
-1. The network is evaluated at $`y^*`$. This gives the nominal
-   preactivations $`\nu^*`$ of all hidden neurons.
-2. Layer by layer, the changes $`\nu - \nu^*`$ of the preactivations are
-   bounded by linear functions of $`\lvert y - y^* \rvert`$ (step S1). The
-   activation function of each neuron is then replaced by two slopes that
-   are valid on the interval of its preactivation (step S2). Three cases
-   occur: the interval lies above $`\nu^*`$ (Case 1), below $`\nu^*`$
-   (Case 2), or contains $`\nu^*`$ (Case 3).
-3. The output layer gives the matrices $`L`$ and $`U`$.
+1. **Evaluate the anchor.** Compute the nominal output and each neuron's nominal preactivation $\nu^*$.
+2. **Propagate through the weights (S1).** Use the positive and negative parts of each weight matrix to bound preactivation changes by linear functions of $z=|y-y^*|$.
+3. **Bound each activation (S2).** Enclose the activation change using secant slopes over its preactivation interval. Refine the interval with the linear bounds when `intervals="intersect"`.
+4. **Apply the output layer.** Return the matrices $L_k,U_k$, and combine the pieces into scalar-input sector slopes when applicable.
 
-Only changes with respect to $`y^*`$ are propagated, so the biases cancel.
-Networks with biases are therefore supported.
+Biases cancel from the difference at an affine layer, but still affect the
+nominal preactivations and therefore the activation slopes.
 
-**Case 3.** If the interval of a neuron contains $`\nu^*`$, one slope is
-used on each side of $`\nu^*`$. In addition, only the parts of the linear
-bounds of the neuron that can make its change negative or positive are
-kept ($`\min(L, 0)`$ and $`\max(U, 0)`$). This is most effective for ReLU: a
-neuron that is inactive at $`y^*`$ ($`\nu^* \le 0`$) can only increase, so
-its lower slope is zero.
+<details>
+<summary><strong>The three activation cases and returned diagnostics</strong></summary>
 
-**Intervals.** In step S2, the interval of each neuron is by default the
-intersection of its interval bound propagation (IBP) interval with the
-range of its linear bounds over the box (`intervals="intersect"`). The
-option `intervals="ibp"` uses the IBP interval alone. For the demonstration
-network the difference is large: the bound is $`[-2.786, -1.200]`$ with the
-intersection and $`[-2.878, 0.251]`$ with IBP alone. Both intervals are
-computed for the changes $`\nu - \nu^*`$, so that rounding errors cannot
-place a neuron whose interval ends exactly at $`\nu^*`$ in Case 3.
+For each neuron, the preactivation interval is above $\nu^*$ (Case 1),
+below $\nu^*$ (Case 2), or straddles $\nu^*$ (Case 3).
+The slope ordering changes on the negative side. In Case 3, the method
+uses separate maximum secant slopes on the two sides, together with the
+entrywise negative part of the lower linear bound and positive part of the
+upper linear bound.
+
+Each `piece.case3` records the number of Case 3 neurons per hidden layer.
+This helps explain conservatism: on the demo, `intervals="ibp"` gives
+`[0, 8]` per piece, while the default refinement gives `[0, 0]`.
+
+The result also contains `ystar`, `pistar`, `y_lo`, `y_hi`, `intervals`, and
+`activation`. Each piece contains `signs`, `z_hi`, `L`, `U`, and `case3`.
+
+</details>
+
+## MATLAB and GNU Octave
+
+Clone or download the repository and add its `matlab` folder to your path.
+From the repository root:
+
+```matlab
+addpath('matlab')
+
+net = nnsector.demo_network();
+sb = nnsector.local_bound(net, -1, 1, 'ystar', 0);
+disp([sb.gamma1, sb.gamma2])
+
+gb = nnsector.global_bound(net);
+res = nnsector.check(net, sb);
+disp(res.passed)
+```
+
+Requires **MATLAB R2016b+** or **GNU Octave**. The same local and global
+bound forms are available. MATLAB evaluates batches by **columns** using
+`nnsector.forward(net, X)`; Python evaluates batches by rows.
+See the [MATLAB guide](matlab/README.md) for custom networks, options,
+examples, and tests.
+
+## API at a glance
+
+| Function | Purpose |
+|---|---|
+| `Network(weights, biases=None, activation="tanh", alpha=None)` | Define a network from arrays. |
+| `Network.from_torch(model)` | Import a supported sequential PyTorch model. |
+| `local_bound(net, y_lo, y_hi, ystar=None, intervals="intersect")` | Compute a local sector on an input box. Scalar box endpoints and anchors broadcast to every input. |
+| `global_bound(net)` | Compute a bound valid for every pair of inputs. |
+| `check(net, bound, samples=20000, box=None, ystar=None, seed=0)` | Search sample points for bound violations. For a global bound, supply `box=(y_lo, y_hi)`. |
+| `demo_network()` | Load the bundled trained tanh network. |
 
 ## Examples and tests
 
-| File | Content |
+| Example | What you will learn |
 |---|---|
-| `examples/example1_demo.py` | The demonstration network, and a bound about $`y^* = 0.5`$. |
-| `examples/example2_biases.py` | Random networks with biases, operating points inside the box, and two inputs. |
-| `examples/example3_activations.py` | The weights of the demonstration network with each activation function. |
-| `examples/example4_pytorch.py` | Training of a small PyTorch controller and computation of its bound. |
+| [Demo network](examples/example1_demo.py) | Local and global bounds, shifted anchors, and plotting. |
+| [Biases and multiple inputs](examples/example2_biases.py) | Bound biased networks and inspect sign pieces. |
+| [Activation functions](examples/example3_activations.py) | Apply the supported activations to the demo weights. |
+| [PyTorch controller](examples/example4_pytorch.py) | Train a small controller and compute its sector. |
+| [README figures](docs/make_readme_figures.py) | Reproduce the figures and their numerical data. |
 
-The test suite (`pytest`) compares the bound of the demonstration network
-with its exact secant slopes, compares the secant slope ranges of all
-activation functions with brute-force evaluation, and checks the bounds of
-random networks with biases on sample points.
+For development:
 
-## MATLAB
+```bash
+git clone https://github.com/hmon91/nnsector.git
+cd nnsector
+python -m pip install -e ".[test,examples]"
+pytest
+python examples/example1_demo.py
+```
 
-A MATLAB implementation with the same functionality is provided in
-[`matlab/`](matlab/README.md). It contains the functions
-`nnsector.network`, `nnsector.local_bound`, `nnsector.global_bound`,
-`nnsector.check`, `nnsector.forward` and `nnsector.demo_network`. It
-requires MATLAB R2016b or later and also runs in GNU Octave.
+The tests check the demo's numerical results, compare activation secant
+ranges against dense evaluations, and sample bounds for networks with
+biases and different input dimensions. PyTorch-specific tests require
+PyTorch.
+
+To regenerate the README figures from a development checkout:
+
+```bash
+python -m pip install pillow
+python docs/make_readme_figures.py
+```
+
+Static figures are provided as **PNG and SVG**, together with an animated
+GIF. See [figure notes and data](docs/FIGURES.md).
+
+## Related tools
+
+[auto_LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA) provides
+linear-relaxation bound propagation on general PyTorch computational graphs.
+`nnsector` focuses on sector descriptions of feedforward networks around
+operating points, with a small NumPy core and a MATLAB implementation.
+[nnstab](https://github.com/hmon91/nnstab) connects these sector bounds to
+stability verification of neural-network feedback systems.
 
 ## Citation
 
-If you use nnsector in your research, please cite [1].
+If you use `nnsector` in your research, please cite:
 
-[1] H. Montazeri Hedesh, M. K. Wafi, and M. Siami, "Local Stability and
-Region of Attraction Analysis for Neural Network Feedback Systems under
-Positivity Constraints," in *Proc. 2025 IEEE 64th Conference on Decision
-and Control (CDC)*, Rio de Janeiro, Brazil, 2025.
-doi: [10.1109/CDC57313.2025.11312171](https://ieeexplore.ieee.org/document/11312171).
-Preprint: [arXiv:2505.22889](https://arxiv.org/abs/2505.22889).
+H. Montazeri Hedesh, M. K. Wafi, and M. Siami,
+**“Local Stability and Region of Attraction Analysis for Neural Network
+Feedback Systems under Positivity Constraints,”**
+*2025 IEEE 64th Conference on Decision and Control (CDC)*,
+Rio de Janeiro, Brazil, 2025.
+[DOI: 10.1109/CDC57313.2025.11312171](https://ieeexplore.ieee.org/document/11312171) ·
+[Preprint: arXiv:2505.22889](https://arxiv.org/abs/2505.22889)
 
 ```bibtex
 @inproceedings{montazerihedesh2025local,
@@ -261,6 +404,8 @@ Preprint: [arXiv:2505.22889](https://arxiv.org/abs/2505.22889).
 }
 ```
 
-## License
+## Contributing and license
 
-nnsector is released under the BSD 3-Clause License. See [LICENSE](LICENSE).
+Questions, reproducible bug reports, and examples are welcome in
+[GitHub Issues](https://github.com/hmon91/nnsector/issues).
+`nnsector` is released under the [BSD 3-Clause License](LICENSE).
