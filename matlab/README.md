@@ -1,16 +1,10 @@
 # nnsector for MATLAB
 
-Sector bounds for feedforward neural networks, in MATLAB and GNU Octave.
-The Python package with the same method is described in the
+This folder contains the MATLAB implementation of nnsector, which computes
+local and global sector bounds for feedforward neural networks. It is also
+compatible with GNU Octave. The method, the notation and the guarantees are
+the same as in the Python package and are described in the
 [main README](../README.md).
-
-You give the network, a point `y*` and a box that contains it. You get two
-lines (slopes) through the point `(y*, pi(y*))` that the network stays
-between on the box. For how such local sector bounds are used to study
-stability and the region of attraction of neural network feedback systems,
-see the paper in the [main README](../README.md#citing).
-
-Supported activations: `tanh`, `sigmoid`, `relu`, `leakyrelu` and `softplus`.
 
 ## Setup
 
@@ -18,152 +12,101 @@ Supported activations: `tanh`, `sigmoid`, `relu`, `leakyrelu` and `softplus`.
 addpath('path/to/nnsector/matlab')     % the folder that contains +nnsector
 ```
 
-Needs MATLAB R2016b or newer. It also runs in GNU Octave (tested with 8.4).
+The library requires MATLAB R2016b or later. It also runs in GNU Octave
+(tested with version 8.4).
 
 ## Quick start
 
 ```matlab
-W   = {W1, W2, W3};             % weights: W{i} is l_i x l_{i-1}
-b   = {b1, b2, b3};             % biases (leave out for none)
-net = nnsector.network(W, b);                          % tanh
-net = nnsector.network(W, b, 'Activation', 'relu');    % or another activation
+W   = {W1, W2, W3};                     % weights: W{i} is l_i x l_{i-1}
+b   = {b1, b2, b3};                     % biases (omit b for a network without biases)
+net = nnsector.network(W, b);                            % tanh (default)
+net = nnsector.network(W, b, 'Activation', 'relu');      % another activation
 
-sb = nnsector.local_bound(net, y_lo, y_hi);                   % about y* = 0
-sb = nnsector.local_bound(net, y_lo, y_hi, 'ystar', ystar);   % about your y*
+sb = nnsector.local_bound(net, y_lo, y_hi);                   % operating point y* = 0
+sb = nnsector.local_bound(net, y_lo, y_hi, 'ystar', ystar);   % another operating point
+gb = nnsector.global_bound(net);                              % bound for all inputs
 
-sb.gamma1, sb.gamma2
+res = nnsector.check(net, sb);          % res.passed is true if no sample violates the bound
 ```
 
-A small demo network comes with the library. It was trained to act like the
-controller `u = -tanh(2y) - 0.5y` (1 input, two hidden layers of 8 tanh
-neurons, 1 output, with biases):
+**Example.** The demonstration network has one input, two hidden layers of
+eight tanh neurons, one output, and biases. It was trained to approximate
+the controller `u = -tanh(2y) - 0.5y`.
 
 ```matlab
 net = nnsector.demo_network();
-sb  = nnsector.local_bound(net, -1, 1);     % [-2.786, -1.200]
+sb  = nnsector.local_bound(net, -1, 1);     % sb.gamma1 = -2.786, sb.gamma2 = -1.200
 ```
 
-The exact secant slopes of this network on `[-1, 1]` lie in
+On `[-1, 1]`, the secant slopes of this network about `y* = 0` lie in
 `[-2.520, -1.463]`, so the bound is close.
-
-The network is `omega_0 = y`, `omega_i = f(W_i*omega_{i-1} + b_i)` for each
-hidden layer, and `pi(y) = W_{q+1}*omega_q + b_{q+1}`. All hidden layers use
-the same activation `f`.
-
-## Activations
-
-| `'Activation'` | f(x) | secant slopes lie in | f(0) |
-|---|---|---|---|
-| `'tanh'` (default) | tanh(x) | [0, 1] | 0 |
-| `'sigmoid'` | 1 / (1 + e^-x) | [0, 1/4] | 1/2 |
-| `'relu'` | max(x, 0) | [0, 1] | 0 |
-| `'leakyrelu'` | max(x, 0) + alpha*min(x, 0) | [alpha, 1] for alpha <= 1 | 0 |
-| `'softplus'` | log(1 + e^x) | [0, 1] | log 2 |
-
-For the leaky ReLU, set the slope for x < 0 with `'Alpha'` (default 0.01):
-
-```matlab
-net = nnsector.network(W, b, 'Activation', 'leakyrelu', 'Alpha', 0.1);
-```
-
-All five never decrease, which the local bound relies on. The local bound
-is about `pi(y*)`, so activations with f(0) ~= 0 (sigmoid, softplus) work
-the same way as the others.
-
-## What you get
-
-**One input (`p = 1`).** For every `y ~= y*` in the box (one row per output):
-
-    gamma1 <= (pi(y) - pi(y*)) / (y - y*) <= gamma2
-
-For `y >= y*` this reads `gamma1*(y - y*) <= pi(y) - pi(y*) <= gamma2*(y - y*)`.
-For `y <= y*` the two lines swap places.
-
-**`y*` at the lower corner of the box (`y* = y_lo`), any number of inputs.**
-Componentwise:
-
-    gamma1*(y - y*) <= pi(y) - pi(y*) <= gamma2*(y - y*)
-
-**`y*` inside the box, several inputs.** No single pair of matrices works on
-all sides of `y*`. So the box is cut at `y*` into pieces on which every
-`y_k - y*_k` keeps one sign (at most `2^p` pieces). On piece `k`, with its
-signs in `sb.pieces(k).signs`:
-
-    sb.pieces(k).L * |y - y*|  <=  pi(y) - pi(y*)  <=  sb.pieces(k).U * |y - y*|
-
-In this case `gamma1` and `gamma2` are empty. The pieces are always in
-`sb.pieces`, for any number of inputs.
-
-Other fields: `ystar`, `pistar` (= `pi(y*)`), `y_lo`, `y_hi`, `intervals`,
-`activation`. Each piece also has `z_hi` (the largest `|y - y*|` on it) and
-`case3` (the number of neurons per hidden layer in Case 3, the loosest case).
 
 ## Functions
 
-| Function | What it does |
+| Function | Description |
 |---|---|
-| `nnsector.network(W, b, ...)` | Builds and checks a network. Leave `b` out for zero biases. Options: `'Activation'` (default `'tanh'`) and `'Alpha'` (leaky ReLU). |
-| `nnsector.local_bound(net, y_lo, y_hi, ...)` | Local sector bound about `y*` on the box. Options: `'ystar'` (default 0) and `'Intervals'` (see below). |
+| `nnsector.network(W, b, ...)` | Defines and checks a network. Options: `'Activation'` (`'tanh'` (default), `'sigmoid'`, `'relu'`, `'leakyrelu'` or `'softplus'`) and `'Alpha'` (slope of the leaky ReLU for x < 0, default 0.01). |
+| `nnsector.local_bound(net, y_lo, y_hi, ...)` | Local sector bound on the box `[y_lo, y_hi]`. Options: `'ystar'` (operating point, default 0) and `'Intervals'` (`'intersect'` (default) or `'ibp'`). |
 | `nnsector.global_bound(net)` | Global sector bound. |
-| `nnsector.check(net, bound, ...)` | Tests a bound on many sample points. `res.passed` is true if no sample breaks it. |
+| `nnsector.check(net, bound, ...)` | Tests a bound on sample points. Options: `'Samples'` (default 20000), and `'Box'` and `'ystar'` for a global bound. A sampling test cannot prove a bound; it can only detect an incorrect one. |
 | `nnsector.forward(net, X)` | Evaluates the network on each column of `X`. |
-| `nnsector.demo_network()` | The demo network above. |
+| `nnsector.demo_network()` | The demonstration network described above. |
 
-`y_lo`, `y_hi` and `ystar` can be scalars (used for every input) or vectors.
-The box does not have to lie in the nonnegative orthant.
+The arguments `y_lo`, `y_hi` and `ystar` may be scalars (used for every
+input) or vectors. The box need not lie in the nonnegative orthant.
 
-## How the local bound is computed
+## Results
 
-It is computed once on each piece of the box:
+**Local bound.** The structure `sb` contains:
 
-1. Run the network at `y*` to get the nominal preactivations `nu*`.
-2. Layer by layer, bound the changes `nu - nu*` by linear functions of
-   `|y - y*|` (step S1). Then replace the activation by two slopes that hold
-   on each neuron's interval (step S2). There are three cases: the interval
-   lies above `nu*` (Case 1), below it (Case 2), or contains it (Case 3).
-3. The output layer gives `L` and `U`.
+* `gamma1`, `gamma2` (`m x p`): the slopes. For one input, every secant
+  slope `(pi(y) - pi(y*))/(y - y*)` on the box lies between them (row by
+  row). If `y*` is the lower corner of the box, then
+  `gamma1*(y - y*) <= pi(y) - pi(y*) <= gamma2*(y - y*)` for every `y` in
+  the box. If `y*` lies inside the box and there are several inputs, both
+  fields are empty.
+* `pieces`: the bound on each piece of the box on which every component of
+  `y - y*` has a fixed sign (`signs`). On piece `k`,
+  `pieces(k).L*|y - y*| <= pi(y) - pi(y*) <= pieces(k).U*|y - y*|`. Each
+  piece also contains `z_hi` (the largest `|y - y*|` on the piece) and
+  `case3` (the number of neurons per hidden layer in Case 3).
+* `ystar`, `pistar` (the value `pi(y*)`), `y_lo`, `y_hi`, `intervals` and
+  `activation`.
 
-The biases cancel in the changes, so networks with biases are fine.
+**Global bound.** The structure `gb` contains
+`Gamma2 = c^q |W_{q+1}| ... |W_1|` and `Gamma1 = -Gamma2`, where `q` is the
+number of hidden layers and `c` is the largest secant slope of the
+activation (1/4 for sigmoid, `max(alpha, 1)` for the leaky ReLU, and 1 for
+the others). With or without biases, for all `y` and `y*`,
+`-Gamma2*|y - y*| <= pi(y) - pi(y*) <= Gamma2*|y - y*|`. If the network has
+no biases and `f(0) = 0` (tanh, ReLU, leaky ReLU), then `pi(0) = 0`, and
+`Gamma1*y <= pi(y) <= Gamma2*y` for all `y >= 0`.
 
-**Case 3** (a neuron's interval contains `nu*`) uses two slopes, one for
-each side of `nu*`, and only the parts of the neuron's linear bounds `L`,
-`U` from step S1 that can push its change below or above 0 (`min(L, 0)` and
-`max(U, 0)`). This helps most for ReLU: a neuron that is off at `y*`
-(`nu* <= 0`) can only go up, so its lower slope is 0.
-
-**`'Intervals'`.** In step S2, each neuron's interval is by default the
-overlap of its interval bound propagation (IBP) interval and the range of
-its linear bounds over the box (`'intersect'`). `'ibp'` uses the IBP
-interval alone. For the demo network this matters: `[-2.786, -1.200]` with
-the overlap and `[-2.878, 0.251]` with IBP alone. Both kinds of interval are
-computed for the changes `nu - nu*`, so a neuron whose interval ends exactly
-at `nu*` is never pushed into Case 3 by rounding.
-
-## Global bound
-
-`gb = nnsector.global_bound(net)` gives `gb.Gamma2 = c^q |W_{q+1}| ... |W_1|`
-and `gb.Gamma1 = -gb.Gamma2`. Here q is the number of hidden layers and c is
-the largest secant slope of the activation: 1/4 for sigmoid, and 1 for the
-others (for the leaky ReLU, `max(alpha, 1)`).
-
-* With or without biases, for every `y` and `y*`:
-  `-Gamma2*|y - y*| <= pi(y) - pi(y*) <= Gamma2*|y - y*|`.
-  It holds because no secant slope of the activation is larger than c.
-* With no biases and f(0) = 0 (tanh, ReLU, leaky ReLU), `pi(0) = 0`, so for
-  every `y >= 0`: `Gamma1*y <= pi(y) <= Gamma2*y`.
+The computation of the local bound, including the treatment of neurons in
+Case 3 and the `'Intervals'` option, is described in the
+[main README](../README.md#computation-of-the-local-bound).
 
 ## Examples and tests
 
-* `examples/example1.m`: the demo network, plus a bound about `y* = 0.5`.
-* `examples/example2.m`: random networks with biases, `y*` inside the box, two inputs.
-* `examples/example3.m`: the weights of the demo network with each activation.
-* `tests/run_tests.m`: from the `tests` folder, run `run_tests`.
+| File | Content |
+|---|---|
+| `examples/example1.m` | The demonstration network, and a bound about `y* = 0.5`. |
+| `examples/example2.m` | Random networks with biases, operating points inside the box, and two inputs. |
+| `examples/example3.m` | The weights of the demonstration network with each activation function. |
+| `tests/run_tests.m` | The test suite. Run `run_tests` from the `tests` folder. |
 
-## Adding an activation
+## Adding an activation function
 
-Everything that depends on the activation is in `+nnsector/activation.m`.
-To add one that never decreases, add a `case` there that sets `f`, `slope`
-and `secant_range`: the smallest and largest secant slope
-`(f(x) - f(a))/(x - a)` for x in an interval, with the one-sided derivative
-at an end point equal to a. A non-monotone activation such as Swish would
-also need changes in `interval` and in step S2 of `local_bound.m`.
+All code that depends on the activation function is in
+`+nnsector/activation.m`. A nondecreasing activation function is added as a
+new `case` that defines `f`, `slope` and `secant_range`. The function
+`secant_range` returns the smallest and the largest secant slope
+`(f(x) - f(a))/(x - a)` for `x` in an interval, where the one-sided
+derivative is used at `x = a`. A non-monotone activation function, such as
+Swish, would also require changes in `interval` and in step S2 of
+`local_bound.m`.
+
+## Citation
+
+See the [main README](../README.md#citation).
