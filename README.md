@@ -69,7 +69,7 @@ fixed operating point has a slope between `sb.gamma1` and `sb.gamma2`:
 ```
 
 The network was trained to approximate the controller
-$u=-\tanh(2y)-0.5y$. The following figures evaluate the **actual bundled
+$`u=-\tanh(2y)-0.5y`$. The following figures evaluate the **actual bundled
 network** and use the bounds returned by `nnsector`.
 
 ![Global and local sectors for the same demo network, plotted on identical axes. The local sector is narrower on the chosen box.](docs/assets/local-vs-global.png)
@@ -152,11 +152,11 @@ are outside this importer's supported model format.
 
 | `activation` | Function | Global secant-slope range |
 |---|---|---|
-| `"tanh"` (default) | $\tanh(x)$ | $[0,1]$ |
-| `"sigmoid"` | $1/(1+e^{-x})$ | $[0,1/4]$ |
-| `"relu"` | $\max(x,0)$ | $[0,1]$ |
-| `"leakyrelu"` | $\max(x,0)+\alpha\min(x,0)$ | $[\min(\alpha,1),\max(\alpha,1)]$ |
-| `"softplus"` | $\log(1+e^x)$ | $[0,1]$ |
+| `"tanh"` (default) | $`\tanh(x)`$ | $`[0,1]`$ |
+| `"sigmoid"` | $`1/(1+e^{-x})`$ | $`[0,1/4]`$ |
+| `"relu"` | $`\max(x,0)`$ | $`[0,1]`$ |
+| `"leakyrelu"` | $`\max(x,0)+\alpha\min(x,0)`$ | $`[\min(\alpha,1),\max(\alpha,1)]`$ |
+| `"softplus"` | $`\log(1+e^x)`$ | $`[0,1]`$ |
 
 Leaky ReLU uses `alpha=0.01` by default and accepts `alpha >= 0`, for example
 `ns.Network(weights, biases, activation="leakyrelu", alpha=0.1)`.
@@ -177,10 +177,10 @@ print(f"[{sb.gamma1.item():.4f}, {sb.gamma2.item():.4f}]")
 
 ![Sectors anchored at y*=0 and y*=0.5 pass through the corresponding actual network outputs.](docs/assets/operating-point.png)
 
-The local result bounds $\pi(y)-\pi(y^*)$ relative to **one fixed anchor**.
+The local result bounds $`\pi(y)-\pi(y^*)`$ relative to **one fixed anchor**.
 It does not establish the same local slope bounds between every pair of
-points in the box. Setting `ystar=0` gives a bound relative to $\pi(0)$;
-this is a sector through the origin only when $\pi(0)=0$.
+points in the box. Setting `ystar=0` gives a bound relative to $`\pi(0)`$;
+this is a sector through the origin only when $`\pi(0)=0`$.
 
 ![The local sector varies with the input-box radius. On the demo, the default interval intersection gives a narrower sector than using IBP intervals alone.](docs/assets/domain-and-tightness.png)
 
@@ -194,7 +194,7 @@ settings, not a comparison with another library.
 
 ## Several inputs
 
-With several inputs, the sign of each component of $y-y^*$ matters.
+With several inputs, the sign of each component of $`y-y^*`$ matters.
 `nnsector` splits the box at the anchor and computes a bound on each piece.
 
 ![A two-input box splits into four sign regions around an interior operating point. Each region has its own L and U matrices acting on absolute input displacement.](docs/assets/multi-input.png)
@@ -216,38 +216,38 @@ for piece in sb.pieces:
     print(piece.signs, piece.L, piece.U)
 ```
 
-An interior anchor can produce up to $2^p$ pieces for `p` inputs. A
+An interior anchor can produce up to $`2^p`$ pieces for `p` inputs. A
 lower-corner anchor needs one piece. This sign partitioning is an important
 cost consideration for high-dimensional inputs.
 
 ## Guarantees
 
-Write $\Delta y=y-y^*$ and $\Delta\pi=\pi(y)-\pi(y^*)$.
+Write $`\Delta y=y-y^*`$ and $`\Delta\pi=\pi(y)-\pi(y^*)`$.
 All inequalities and absolute values below are componentwise.
 The network has `p` inputs, `m` outputs, `q` hidden layers, and a linear
 output layer. The implementation computes its bounds in double precision.
 
-**One input.** For every $y\ne y^*$ in the specified box,
+**One input.** For every $`y\ne y^*`$ in the specified box,
 
 ```math
 \gamma_1\leq\frac{\Delta\pi}{\Delta y}\leq\gamma_2.
 ```
 
-The boundary lines are $\pi(y^*)+\gamma_1\Delta y$ and
-$\pi(y^*)+\gamma_2\Delta y$. Their ordering as lower and upper output
-bounds reverses when $\Delta y<0$.
+The boundary lines are $`\pi(y^*)+\gamma_1\Delta y`$ and
+$`\pi(y^*)+\gamma_2\Delta y`$. Their ordering as lower and upper output
+bounds reverses when $`\Delta y<0`$.
 
 **Several inputs, with the anchor at the lower corner.** Since
-$\Delta y\geq0$, the returned matrices satisfy
+$`\Delta y\geq0`$, the returned matrices satisfy
 
 ```math
 \gamma_1\Delta y\leq\Delta\pi\leq\gamma_2\Delta y.
 ```
 
 **Several inputs, other anchor positions.** Use `sb.pieces`. On piece `k`,
-let $z=|\Delta y|$ and let $s_k$ be `piece.signs`. For
-$0\leq z\leq\texttt{piece.z_hi}$ and
-$y=y^*+\operatorname{diag}(s_k)z$,
+let $`z=|\Delta y|`$ and let $`s_k`$ be `piece.signs`. For
+$`0\leq z\leq\texttt{piece.z_hi}`$ and
+$`y=y^*+\operatorname{diag}(s_k)z`$,
 
 ```math
 L_kz\leq\Delta\pi\leq U_kz.
@@ -256,7 +256,7 @@ L_kz\leq\Delta\pi\leq U_kz.
 Here `sb.gamma1` and `sb.gamma2` are `None`; `piece.L` and `piece.U`
 have shape `(m, p)`.
 
-**Global bound.** For every pair $y,y^*$,
+**Global bound.** For every pair $`y,y^*`$,
 
 ```math
 -\Gamma_2|y-y^*|\leq\pi(y)-\pi(y^*)\leq\Gamma_2|y-y^*|,
@@ -265,21 +265,21 @@ have shape `(m, p)`.
 \qquad \Gamma_1=-\Gamma_2,
 ```
 
-where $c$ is the activation's largest absolute secant slope.
+where $`c`$ is the activation's largest absolute secant slope.
 `gb.Gamma1` and `gb.Gamma2` have shape `(m, p)`.
 With zero biases and an activation that vanishes at zero (tanh, ReLU, or
-leaky ReLU), $\pi(0)=0$; for $y\geq0$, this specializes to
-$\Gamma_1y\leq\pi(y)\leq\Gamma_2y$.
+leaky ReLU), $`\pi(0)=0`$; for $`y\geq0`$, this specializes to
+$`\Gamma_1y\leq\pi(y)\leq\Gamma_2y`$.
 
 ## Computation of the local bound
 
 On each sign piece, `nnsector` propagates bounds on deviations from the
 operating point through the network:
 
-1. **Evaluate the anchor.** Compute the nominal output and each neuron's nominal preactivation $\nu^*$.
-2. **Propagate through the weights (S1).** Use the positive and negative parts of each weight matrix to bound preactivation changes by linear functions of $z=|y-y^*|$.
+1. **Evaluate the anchor.** Compute the nominal output and each neuron's nominal preactivation $`\nu^*`$.
+2. **Propagate through the weights (S1).** Use the positive and negative parts of each weight matrix to bound preactivation changes by linear functions of $`z=|y-y^*|`$.
 3. **Bound each activation (S2).** Enclose the activation change using secant slopes over its preactivation interval. Refine the interval with the linear bounds when `intervals="intersect"`.
-4. **Apply the output layer.** Return the matrices $L_k,U_k$, and combine the pieces into scalar-input sector slopes when applicable.
+4. **Apply the output layer.** Return the matrices $`L_k,U_k`$, and combine the pieces into scalar-input sector slopes when applicable.
 
 Biases cancel from the difference at an affine layer, but still affect the
 nominal preactivations and therefore the activation slopes.
@@ -287,8 +287,8 @@ nominal preactivations and therefore the activation slopes.
 <details>
 <summary><strong>The three activation cases and returned diagnostics</strong></summary>
 
-For each neuron, the preactivation interval is above $\nu^*$ (Case 1),
-below $\nu^*$ (Case 2), or straddles $\nu^*$ (Case 3).
+For each neuron, the preactivation interval is above $`\nu^*`$ (Case 1),
+below $`\nu^*`$ (Case 2), or straddles $`\nu^*`$ (Case 3).
 The slope ordering changes on the negative side. In Case 3, the method
 uses separate maximum secant slopes on the two sides, together with the
 entrywise negative part of the lower linear bound and positive part of the
