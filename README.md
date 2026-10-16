@@ -83,15 +83,12 @@ network** and use the bounds returned by `nnsector`.
 `check` searches for violations numerically. A successful sample check is a
 useful diagnostic; it does not prove a bound.
 
-<details>
-<summary><strong>Watch the sector change as the input box shrinks</strong></summary>
+**Watch the sector change as the input box shrinks**
 
 ![Animation of recomputed sectors as the radius of the input box changes, with fixed axes and a fixed operating point.](docs/assets/local-sector.gif)
 
 The shaded sector applies only inside the selected box. A
 [static view](docs/assets/domain-and-tightness.png) is available below.
-
-</details>
 
 ## Your own network
 
