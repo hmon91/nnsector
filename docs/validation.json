@@ -9,6 +9,11 @@
       "stdout": "[[1.08095892]] [[1.69313145]]\n"
     },
     {
+      "block": 3,
+      "stdout": "",
+      "note": "The PyTorch example prints nothing; it ran without errors. Run with PyTorch 2.14.1 on CPU."
+    },
+    {
       "block": 4,
       "stdout": "[-2.3799, -0.7512]\n"
     },
@@ -17,12 +22,7 @@
       "stdout": "4\nTrue\n[1. 1.] [[ 0.12489114 -0.64314465]] [[0.64528488 0.12356793]]\n[ 1. -1.] [[0.22269775 0.29845757]] [[0.64528488 0.67273009]]\n[-1.  1.] [[-1.03104321 -0.6931011 ]] [[-0.30149423 -0.47942053]]\n[-1. -1.] [[-1.10860572 -0.30482207]] [[-0.30891984  0.54916215]]\n"
     }
   ],
-  "python_blocks_syntax_checked_only": [
-    {
-      "block": 3,
-      "reason": "PyTorch is not installed; syntax checked and API reviewed."
-    }
-  ],
+  "python_blocks_syntax_checked_only": [],
   "existing_examples": [
     {
       "file": "example1_demo.py",
@@ -41,8 +41,40 @@
       "exit_code": 0,
       "stdout": "activation  local bound         exact slopes        global bound        check\ntanh        [-2.7863, -1.2002]  [-2.5200, -1.4630]  [-4.6588,  4.6588]  True\nsigmoid     [-0.1702, -0.1424]  [-0.1616, -0.1468]  [-0.2912,  0.2912]  True\nrelu        [-1.5026, -0.0278]  [-0.6531, -0.2636]  [-4.6588,  4.6588]  True\nleakyrelu   [-1.5187, -0.0363]  [-0.6663, -0.2810]  [-4.6588,  4.6588]  True\nsoftplus    [-0.7479, -0.3934]  [-0.5981, -0.5327]  [-4.6588,  4.6588]  True\n",
       "stderr": ""
+    },
+    {
+      "file": "example4_pytorch.py",
+      "exit_code": 0,
+      "stdout": "training loss: 2.86e-06\nNetwork(widths=[1, 16, 16, 1], activation='tanh')\nLocalBound (tanh, 2 piece(s), intervals='intersect')\n  y*    = [0.]\n  box   = [-1.] .. [1.]\n  gamma1 = [[-2.8959]]\n  gamma2 = [[-1.2135]]\nCheckResult(max_violation=8.326672684688674e-17, passed=True, tol=2.464930770415813e-09, samples=121003)\n",
+      "stderr": "",
+      "note": "Run with PyTorch 2.14.1 on CPU."
     }
   ],
-  "matlab_execution": "Not run: MATLAB and GNU Octave are unavailable. Commands checked against repository API.",
-  "pytest": "Not run: pytest is unavailable; the delivered examples and numerical figure checks were executed directly."
+  "matlab_execution": {
+    "environment": "GNU Octave 8.4.0",
+    "readme_block": {
+      "exit_code": 0,
+      "stdout": "  -2.7863  -1.2002\n1\n"
+    },
+    "test_suite": {
+      "command": "cd matlab/tests; run_tests",
+      "passed": 29,
+      "failed": 0,
+      "result": "All tests passed."
+    }
+  },
+  "pytest": {
+    "command": "python -m pytest",
+    "result": "47 passed, 0 skipped",
+    "pytorch_tests": "tests/test_torch.py: 7 passed"
+  },
+  "pytorch_matlab_and_pytest_checks": {
+    "date": "2026-10-16",
+    "commit": "7fc2a786cfd11a6a3c1b766c02d78371bbf47667",
+    "python": "3.13.16",
+    "numpy": "2.5.4",
+    "torch": "2.14.1 (CPU)",
+    "pytest": "9.1.1",
+    "octave": "8.4.0"
+  }
 }

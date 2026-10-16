@@ -69,10 +69,21 @@ organization of [auto_LiRPA](https://github.com/Verified-Intelligence/auto_LiRPA
 - Checked plotted curves against the displayed sectors and sampled secants
   against the computed intervals throughout the 100-radius sweep.
 - Inspected all five static figures and representative animation frames.
-- Syntax-checked the PyTorch example and checked its API against the source.
-  PyTorch, MATLAB, GNU Octave, and pytest were unavailable in the authoring
-  environment, so their runtimes/the full pytest suite were not executed.
+- PyTorch, MATLAB, GNU Octave, and pytest were unavailable in the authoring
+  environment. These checks were run afterwards, on 2026-10-16 at commit
+  [7fc2a78](https://github.com/hmon91/nnsector/tree/7fc2a786cfd11a6a3c1b766c02d78371bbf47667),
+  with Python 3.13.16, NumPy 2.5.4, PyTorch 2.14.1 (CPU), pytest 9.1.1, and
+  GNU Octave 8.4.0. All of them passed:
+  - the PyTorch example in the README and `examples/example4_pytorch.py`
+    ran without errors;
+  - the MATLAB example in the README ran in GNU Octave. It prints the
+    sector `[-2.7863, -1.2002]`, and `nnsector.check` passes;
+  - the MATLAB test suite (`matlab/tests/run_tests.m`) passed all 29 tests
+    in GNU Octave;
+  - the Python test suite passed all 47 tests with pytest, including the 7
+    PyTorch tests, with none skipped.
 
 Exact plot data and numerical-check results are in
-[`figure-data.json`](figure-data.json). Example execution results are in
+[`figure-data.json`](figure-data.json). Example execution results,
+including those of the later PyTorch, GNU Octave, and pytest checks, are in
 [`validation.json`](validation.json).
