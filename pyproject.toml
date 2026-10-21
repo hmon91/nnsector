@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nnsector"
+dynamic = ["version"]
+description = "Sector bounds for feedforward neural networks, for absolute-stability analysis of NN feedback loops"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "Hamidreza Montazeri Hedesh" }]
+keywords = [
+    "neural networks", "verification", "sector bounds", "absolute stability",
+    "Lur'e systems", "positive systems", "robust control",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = ["numpy>=1.21"]
+
+[project.optional-dependencies]
+torch = ["torch>=1.10"]
+test = ["pytest>=7"]
+examples = ["matplotlib>=3.4"]
+
+[project.urls]
+Homepage = "https://github.com/hmon91/nnsector"
+Issues = "https://github.com/hmon91/nnsector/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "nnsector.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nnsector = ["data/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
