@@ -1,0 +1,8 @@
+# GitHub labels a repository with the language that has the most code.
+# Python is the main version of this package; the MATLAB version in
+# matlab/ is a companion. The lines below keep the MATLAB tests and
+# examples out of GitHub's language count, so the label is Python.
+# The MATLAB library code is still counted, so MATLAB still appears
+# in the repository's language bar.
+matlab/tests/** -linguist-detectable
+matlab/examples/** -linguist-detectable
