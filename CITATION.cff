@@ -1,0 +1,69 @@
+cff-version: 1.2.0
+message: "If you use nnsector in your research, please cite the paper below."
+type: software
+title: "nnsector: sector bounds for neural networks, built for control"
+abstract: "Python and MATLAB library that turns a trained feedforward neural network into a sector description for control analysis: local sector bounds on a box around an operating point, and global bounds, for absolute-stability, robustness and region-of-attraction tests of neural network feedback loops."
+authors:
+  - family-names: "Montazeri Hedesh"
+    given-names: "Hamidreza"
+    orcid: "https://orcid.org/0009-0007-0041-830X"
+    affiliation: "Northeastern University"
+repository-code: "https://github.com/hmon91/nnsector"
+url: "https://hmon91.github.io/software/"
+license: BSD-3-Clause
+keywords:
+  - "neural networks"
+  - "verification"
+  - "sector bounds"
+  - "absolute stability"
+  - "Lur'e systems"
+  - "positive systems"
+  - "robust control"
+preferred-citation:
+  type: conference-paper
+  title: "Local Stability and Region of Attraction Analysis for Neural Network Feedback Systems under Positivity Constraints"
+  authors:
+    - family-names: "Montazeri Hedesh"
+      given-names: "Hamidreza"
+      orcid: "https://orcid.org/0009-0007-0041-830X"
+    - family-names: "Wafi"
+      given-names: "Moh Kamalul"
+      orcid: "https://orcid.org/0000-0002-2016-5721"
+    - family-names: "Siami"
+      given-names: "Milad"
+      orcid: "https://orcid.org/0000-0001-7253-4464"
+  collection-title: "2025 IEEE 64th Conference on Decision and Control (CDC)"
+  conference:
+    name: "IEEE Conference on Decision and Control (CDC)"
+    city: "Rio de Janeiro"
+    country: "BR"
+  publisher:
+    name: "IEEE"
+  start: 1142
+  end: 1149
+  year: 2025
+  doi: "10.1109/CDC57313.2025.11312171"
+  identifiers:
+    - type: url
+      value: "https://arxiv.org/abs/2505.22889"
+      description: "Free preprint on arXiv"
+references:
+  - type: article
+    title: "Ensuring Both Positivity and Stability Using Sector-Bounded Nonlinearity for Systems With Neural Network Controllers"
+    authors:
+      - family-names: "Montazeri Hedesh"
+        given-names: "Hamidreza"
+        orcid: "https://orcid.org/0009-0007-0041-830X"
+      - family-names: "Siami"
+        given-names: "Milad"
+        orcid: "https://orcid.org/0000-0001-7253-4464"
+    journal: "IEEE Control Systems Letters"
+    volume: 8
+    start: 1685
+    end: 1690
+    year: 2024
+    doi: "10.1109/LCSYS.2024.3416237"
+    identifiers:
+      - type: url
+        value: "https://arxiv.org/abs/2406.12744"
+        description: "Free preprint on arXiv"
